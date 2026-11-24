@@ -1,0 +1,64 @@
+name: Build Class 6 APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, master]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Extract uploaded ZIP files and locate Android project
+        shell: bash
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/_apk_source"
+          # Extract ZIP files uploaded to the repository (including a ZIP inside another ZIP).
+          for round in 1 2 3; do
+            mapfile -t zips < <(find . -type f -name '*.zip' -not -path './_apk_source/*' -not -path './.git/*')
+            for z in "${zips[@]}"; do
+              dest="$GITHUB_WORKSPACE/_apk_source/round${round}_$(basename "$z" .zip)"
+              mkdir -p "$dest"
+              unzip -oq "$z" -d "$dest" || true
+            done
+            cd "$GITHUB_WORKSPACE"
+          done
+          PROJECT_DIR=""
+          while IFS= read -r f; do
+            candidate="$(dirname "$f")"
+            if [ -f "$candidate/app/build.gradle" ] && [ -f "$candidate/settings.gradle" ]; then
+              PROJECT_DIR="$candidate"
+              break
+            fi
+          done < <(find "$GITHUB_WORKSPACE" -type f -name settings.gradle -not -path '*/.gradle/*')
+          if [ -z "$PROJECT_DIR" ]; then
+            echo 'Could not find settings.gradle and app/build.gradle. Upload the project ZIP to the repository root.'
+            exit 1
+          fi
+          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
+          echo "Android project found at: $PROJECT_DIR"
+
+      - name: Build debug APK
+        run: gradle --no-daemon assembleDebug
+        working-directory: ${{ env.PROJECT_DIR }}
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: kelas-sheshom-apk
+          path: ${{ env.PROJECT_DIR }}/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
