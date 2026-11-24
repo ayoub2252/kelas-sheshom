@@ -1,16 +1,17 @@
-name: Build Azmoonyar Ahmad APK
+name: Build Class 6 APK
 
 on:
   workflow_dispatch:
-
-permissions:
-  contents: read
+  push:
+    branches:
+      - main
 
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Get project files
+      - name: Checkout
         uses: actions/checkout@v4
 
       - name: Set up Java
@@ -24,17 +25,23 @@ jobs:
         with:
           gradle-version: '8.9'
 
-      - name: Extract Android project
+      - name: Find project folder
         run: |
-          unzip -q AzmoonyarAhmadi_AndroidStudio_Project.zip -d project
+          if [ -f settings.gradle ]; then
+            echo "PROJECT_DIR=." >> $GITHUB_ENV
+          elif [ -f AzmoonyarAhmadiAndroid/settings.gradle ]; then
+            echo "PROJECT_DIR=AzmoonyarAhmadiAndroid" >> $GITHUB_ENV
+          else
+            echo "Project not found"
+            exit 1
+          fi
 
-      - name: Build debug APK
-        working-directory: project
+      - name: Build APK
         run: gradle assembleDebug
+        working-directory: ${{ env.PROJECT_DIR }}
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: Azmoonyar-Ahmadi-APK
-          path: project/app/build/outputs/apk/debug/app-debug.apk
-          if-no-files-found: error
+          name: kelas-sheshom-apk
+          path: ${{ env.PROJECT_DIR }}/app/build/outputs/apk/debug/app-debug.apk
